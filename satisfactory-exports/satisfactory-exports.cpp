@@ -8,6 +8,14 @@
 static HANDLE g_proc;
 #define RPM(addr, buf, size) (ReadProcessMemory(g_proc, (LPCVOID)(addr), (buf), (size), nullptr))
 
+static bool filter(const std::string& n) {
+	size_t p = n.rfind("::");
+	std::string fn = p == std::string::npos ? n : n.substr(p + 2);
+	if (fn.find("_Implementation") != std::string::npos) return true;//server func
+	if (fn.find("_Validate") != std::string::npos) return true;
+	return fn.size() > 4 && fn.compare(0, 4, "exec") == 0 && isupper((unsigned char)fn[4]);//blueprint/vm thunk
+}
+
 static std::string s_nm(const char* m) {
 	if (m[0] != '?' || m[1] == '?') return m;//ignore mangled msvc slop
 	std::vector<std::string> p;
@@ -44,7 +52,7 @@ void d_ex(uintptr_t base, const std::vector<std::string>& filters) {
 		if (rva >= dd.VirtualAddress && rva < dd.VirtualAddress + dd.Size) continue;//forward export
 		bool match = filters.empty();//dump all if no filter
 		for (auto& f : filters) if (strstr(mangled, f.c_str())) { match = true; break; }
-		if (match) printf("%s -> 0x%08X (RVA)\n", s_nm(mangled).c_str(), rva);
+		if (match) { std::string n = s_nm(mangled); if (!filter(n)) printf("%s -> 0x%08X (RVA)\n", n.c_str(), rva); }
 	}
 }
 
